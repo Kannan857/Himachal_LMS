@@ -10,10 +10,13 @@ namespace LMSCoreWebAPI.Helper
 {
     public class AutoMapperProfile :Profile
     { 
-         public AutoMapperProfile()
+        public AutoMapperProfile()
         {
             CreateMap<User, UserDto>();
             CreateMap<UserDto, User>();
+
+            CreateMap<Department, DepartmentDto>();
+            CreateMap<DepartmentDto, Department>();
         }
     }
 }

@@ -17,6 +17,7 @@ namespace LMSCoreWebAPI.lms
         public string PhoneNumber { get; set; }
         public string AddressLine1 { get; set; }
         public string AddressLine2 { get; set; }
+        public string InstitutionUrl { get; set; }
 
         public virtual ICollection<Institutiondepartment> Institutiondepartment { get; set; }
         public virtual ICollection<Userinstitution> Userinstitution { get; set; }

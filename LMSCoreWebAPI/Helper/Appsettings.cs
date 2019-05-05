@@ -8,5 +8,7 @@ namespace LMSCoreWebAPI.Helper
     public class Appsettings
     {
          public string Secret { get; set; }
+         public string EmaiFromAddress { get; set; }
+         public string EmailPassword { get; set; }
     }
 }

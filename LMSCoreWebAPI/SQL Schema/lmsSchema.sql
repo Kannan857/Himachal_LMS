@@ -8,6 +8,8 @@ CREATE TABLE `Institution`
   `AddressLine2` varchar(255)
 );
 
+ALTER TABLE `Institution` ADD `InstitutionUrl` varchar(255) ;
+
 CREATE TABLE `user`
 (
   `UserId` int PRIMARY KEY AUTO_INCREMENT ,
@@ -23,6 +25,8 @@ CREATE TABLE `user`
   `ModfiedDate` datetime
 );
 
+ALTER TABLE `user` ADD `ResetPasswordToken` CHAR(38) ;
+
 CREATE TABLE `Role`
 (
   `RoleId` int PRIMARY KEY AUTO_INCREMENT ,
@@ -36,6 +40,20 @@ CREATE TABLE `Department`
   `DepartmentName` varchar(255),
   `DepartmentDescription` varchar(255)
 );
+
+
+ALTER TABLE `Department` ADD `DepartmentHead` int NULL ;
+ALTER TABLE `Department` ADD FOREIGN KEY (`DepartmentHead`) REFERENCES `USer` (`UserId`);
+
+ALTER TABLE `Department` ADD `DepartmentAssistantHead` int NULL ;
+ALTER TABLE `Department` ADD FOREIGN KEY (`DepartmentAssistantHead`) REFERENCES `USer` (`UserId`);
+
+ALTER TABLE `Department` ADD `ContactPerson` int NULL ;
+ALTER TABLE `Department` ADD FOREIGN KEY (`ContactPerson`) REFERENCES `USer` (`UserId`);
+
+ALTER TABLE `Department` ADD `ContactNumber`  varchar(255) NULL ;
+ALTER TABLE `Department` ADD `ExtensionNumber`  varchar(25) NULL ;
+ALTER TABLE `Department` ADD `DepartmentFrom`  DateTime NULL ;
 
 CREATE TABLE `UserRole`
 (
@@ -51,6 +69,13 @@ CREATE TABLE `UserDepartment`
   `DepartmentId` int
 );
 
+CREATE TABLE `InstitutionDepartment`
+(
+   `Id` int PRIMARY KEY AUTO_INCREMENT ,
+  `InstitutionId` int,
+  `DepartmentId` int
+);
+
 CREATE TABLE `UserInstitution`
 (
    `Id` int PRIMARY KEY AUTO_INCREMENT ,
@@ -62,7 +87,7 @@ CREATE TABLE `InstitutionDepartment`
 (
    `Id` int PRIMARY KEY AUTO_INCREMENT ,
    `InstitutionId` int,
-    `DepartmentId` int
+   `DepartmentId` int
 );
 
 ALTER TABLE `UserRole` ADD FOREIGN KEY (`UserId`) REFERENCES `user` (`UserId`);
@@ -79,4 +104,13 @@ ALTER TABLE `UserInstitution` ADD FOREIGN KEY (`InstitutionId`) REFERENCES `Inst
 
 ALTER TABLE `InstitutionDepartment` ADD FOREIGN KEY (`InstitutionId`) REFERENCES `Institution` (`InstitutionId`);
 
-ALTER TABLE `InstitutionDepartment` ADD FOREIGN KEY (`DepartmentId`) REFERENCES `Department` (`DepartmentId`);
+ALTER TABLE `InstitutionDepartment` ADD FOREIGN KEY (`DepartmentId`) REFERENCES `Institution` (`DepartmentId`);
+
+ALTER TABLE `User` ADD `MobileNumber` int NULL;
+
+ALTER TABLE `User` ADD `IsVerified` bit NOT NULL default '0'
+
+ALTER TABLE `User` ADD `UniqueId` CHAR(38) NOT NULL ;
+
+
+

@@ -15,10 +15,11 @@ using System.Text;
 using LMSCoreWebAPI.lms;
 using System.Security.Claims;
 using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
 
 namespace LMSCoreWebAPI.Controllers
 {
-    //[Authorize]
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class UserController : ControllerBase
@@ -55,11 +56,13 @@ namespace LMSCoreWebAPI.Controllers
             List<Userrole> userRole = user.Userrole.ToList();
             List<Role> roles = _context.Role.ToList();
 
+            int superAdminRoleId = roles.SingleOrDefault(r => r.RoleName.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase)).RoleId;
             int adminRoleId = roles.SingleOrDefault(r => r.RoleName.Equals("Admin", StringComparison.OrdinalIgnoreCase)).RoleId;
             int professorRoleId = roles.SingleOrDefault(r => r.RoleName.Equals("Professor", StringComparison.OrdinalIgnoreCase)).RoleId;
 
-            bool isAdminUSer = userRole.Any(r=>r.RoleId == adminRoleId);
-            bool isProfessorUSer = userRole.Any(r=>r.RoleId == professorRoleId);
+            bool isSuperAdminUSer = userRole.Any(r => r.RoleId == superAdminRoleId);
+            bool isAdminUSer = userRole.Any(r => r.RoleId == adminRoleId);
+            bool isProfessorUSer = userRole.Any(r => r.RoleId == professorRoleId);
 
 
             if (userInstitution == null)
@@ -73,7 +76,8 @@ namespace LMSCoreWebAPI.Controllers
             {
                 Subject = new ClaimsIdentity(new Claim[]
                 {
-                    new Claim(ClaimTypes.Name, user.UserId.ToString())
+                    new Claim(ClaimTypes.Name, user.UserId.ToString()),
+                    new Claim("InsId", userInstitution.InstitutionId.ToString()),
                 }),
                 Expires = DateTime.UtcNow.AddDays(7),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
@@ -90,25 +94,127 @@ namespace LMSCoreWebAPI.Controllers
                 LastName = user.LastName,
                 Token = tokenString,
                 IsAdminUser = isAdminUSer,
-                IsProfessor = isProfessorUSer
+                IsProfessor = isProfessorUSer,
+                IsSuperAdminUSer = isSuperAdminUSer
             });
+        }
+
+        [AllowAnonymous]
+        [HttpGet("SendUserActivationEmail")]
+        public IActionResult SendUserActivationEmail(int userId)
+        {
+            var user = _userService.GetById(userId);
+
+            try
+            {
+
+                EmailService.SendUserActivationEmail(_appSettings.EmaiFromAddress, _appSettings.EmailPassword, user);
+
+                return Ok(new
+                {
+                    Id = user.UserId
+                });
+            }
+            catch (AppException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [AllowAnonymous]
+        [HttpGet("SendUserActivationEmail")]
+        public IActionResult SendResetPasswordEmail(string userName)
+        {
+            var user = _context.User.Where(u => u.UserName == userName).SingleOrDefault();
+            user.ResetPasswordToken = Guid.NewGuid().ToString();
+
+            _context.Entry(user).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
+            _context.SaveChanges();
+
+            try
+            {
+
+                EmailService.SendUserActivationEmail(_appSettings.EmaiFromAddress, _appSettings.EmailPassword, user);
+
+                return Ok(new
+                {
+                    Id = user.UserId
+                });
+            }
+            catch (AppException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+
+        [HttpGet("ResetPassword")]
+        public IActionResult ResetPassword(string userName, string password)
+        {
+            var user = _context.User.Where(u => u.UserName == userName).SingleOrDefault();
+            user.ResetPasswordToken = null;
+
+            try
+            {
+
+                User updatedUser = _userService.UpdateUserPassword(user, password);
+
+                return Ok(new
+                {
+                    Id = updatedUser.UserId
+                });
+            }
+            catch (AppException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [AllowAnonymous]
         [HttpPost("register")]
         public IActionResult Register([FromBody]UserDto userDto)
         {
-            if (string.IsNullOrEmpty(userDto.Password))
-            {
-                userDto.Password = "!Password1";
-            }
             var user = _mapper.Map<User>(userDto);
 
             try
             {
                 User userDBObj = _userService.Create(user, userDto.Password, userDto);
 
-                return Ok();
+                EmailService.SendUserActivationEmail(_appSettings.EmaiFromAddress, _appSettings.EmailPassword, userDBObj);
+
+                return Ok(new
+                {
+                    Id = userDBObj.UserId
+                });
+            }
+            catch (AppException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [AllowAnonymous]
+        [HttpGet("activate")]
+        public IActionResult Activate(string uniqueId)
+        {
+            var user = _context.User.Where(u => u.UniqueId == uniqueId).FirstOrDefault();
+
+            if (user == null)
+            {
+                return BadRequest(new { message = "User dosen't exist in the system" });
+            }
+
+            try
+            {
+                user.IsVerified = 1;
+                _context.User.Update(user);
+                _context.SaveChanges();
+
+                return Ok(new
+                {
+                    Id = user.UserId,
+                    Message = "Verification Successful"
+                });
             }
             catch (AppException ex)
             {
@@ -117,9 +223,22 @@ namespace LMSCoreWebAPI.Controllers
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public IActionResult GetAll()
         {
             var users = _userService.GetAll();
+            var userDtos = _mapper.Map<IList<UserDto>>(users);
+            return Ok(userDtos);
+        }
+
+        [HttpGet("GetAllVerifiedUsers")]
+        public IActionResult GetAllVerifiedUsers()
+        {
+            var claimsIdentity = this.User.Identity as ClaimsIdentity;
+            var userId = claimsIdentity.FindFirst(ClaimTypes.Name)?.Value;
+            var InstitutionId = claimsIdentity.FindFirst("InsId")?.Value;
+
+            var users = _userService.GetAllVerifiedUsers(int.Parse(InstitutionId));
             var userDtos = _mapper.Map<IList<UserDto>>(users);
             return Ok(userDtos);
         }
@@ -135,19 +254,16 @@ namespace LMSCoreWebAPI.Controllers
         [HttpPut("{id}")]
         public IActionResult Update(int id, [FromBody]UserDto userDto)
         {
-            // map dto to entity and set id
             var user = _mapper.Map<User>(userDto);
             user.UserId = id;
 
             try
             {
-                // save 
-                _userService.Update(user, userDto.Password);
+                _userService.Update(user, userDto.Password, userDto.Role, userDto.Department);
                 return Ok();
             }
             catch (AppException ex)
             {
-                // return error message if there was an exception
                 return BadRequest(new { message = ex.Message });
             }
         }

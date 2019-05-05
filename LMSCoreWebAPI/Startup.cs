@@ -93,6 +93,7 @@ namespace LMSCoreWebAPI
             }
 
             app.UseAuthentication();
+              app.UseHttpsRedirection();
 
             app.UseMvc();
         }

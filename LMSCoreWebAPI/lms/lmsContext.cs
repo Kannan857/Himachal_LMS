@@ -41,15 +41,53 @@ namespace LMSCoreWebAPI.lms
             {
                 entity.ToTable("department", "lms");
 
+                entity.HasIndex(e => e.ContactPerson)
+                    .HasName("ContactPerson");
+
+                entity.HasIndex(e => e.DepartmentAssistantHead)
+                    .HasName("DepartmentAssistantHead");
+
+                entity.HasIndex(e => e.DepartmentHead)
+                    .HasName("DepartmentHead");
+
                 entity.Property(e => e.DepartmentId).HasColumnType("int(11)");
+
+                entity.Property(e => e.ContactNumber)
+                    .HasMaxLength(255)
+                    .IsUnicode(false);
+
+                entity.Property(e => e.ContactPerson).HasColumnType("int(11)");
+
+                entity.Property(e => e.DepartmentAssistantHead).HasColumnType("int(11)");
 
                 entity.Property(e => e.DepartmentDescription)
                     .HasMaxLength(255)
                     .IsUnicode(false);
 
+                entity.Property(e => e.DepartmentHead).HasColumnType("int(11)");
+
                 entity.Property(e => e.DepartmentName)
                     .HasMaxLength(255)
                     .IsUnicode(false);
+
+                entity.Property(e => e.ExtensionNumber)
+                    .HasMaxLength(25)
+                    .IsUnicode(false);
+
+                entity.HasOne(d => d.ContactPersonNavigation)
+                    .WithMany(p => p.DepartmentContactPersonNavigation)
+                    .HasForeignKey(d => d.ContactPerson)
+                    .HasConstraintName("department_ibfk_3");
+
+                entity.HasOne(d => d.DepartmentAssistantHeadNavigation)
+                    .WithMany(p => p.DepartmentDepartmentAssistantHeadNavigation)
+                    .HasForeignKey(d => d.DepartmentAssistantHead)
+                    .HasConstraintName("department_ibfk_2");
+
+                entity.HasOne(d => d.DepartmentHeadNavigation)
+                    .WithMany(p => p.DepartmentDepartmentHeadNavigation)
+                    .HasForeignKey(d => d.DepartmentHead)
+                    .HasConstraintName("department_ibfk_1");
             });
 
             modelBuilder.Entity<Institution>(entity =>
@@ -67,6 +105,10 @@ namespace LMSCoreWebAPI.lms
                     .IsUnicode(false);
 
                 entity.Property(e => e.InstitutionName)
+                    .HasMaxLength(255)
+                    .IsUnicode(false);
+
+                entity.Property(e => e.InstitutionUrl)
                     .HasMaxLength(255)
                     .IsUnicode(false);
 
@@ -133,15 +175,27 @@ namespace LMSCoreWebAPI.lms
                     .HasMaxLength(255)
                     .IsUnicode(false);
 
+                entity.Property(e => e.IsVerified)
+                    .HasColumnType("bit(1)")
+                    .HasDefaultValueSql("b'0'");
+
                 entity.Property(e => e.LastName)
                     .HasMaxLength(255)
                     .IsUnicode(false);
+
+                entity.Property(e => e.MobileNumber).HasColumnType("int(11)");
 
                 entity.Property(e => e.ModifiedBy).HasColumnType("int(11)");
 
                 entity.Property(e => e.PasswordHash).HasColumnType("blob");
 
                 entity.Property(e => e.PasswordSalt).HasColumnType("blob");
+
+                entity.Property(e => e.ResetPasswordToken).HasColumnType("char(38)");
+
+                entity.Property(e => e.UniqueId)
+                    .IsRequired()
+                    .HasColumnType("char(38)");
 
                 entity.Property(e => e.UserName)
                     .HasMaxLength(255)

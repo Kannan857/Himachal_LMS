@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 
 using Microsoft.EntityFrameworkCore;
 
+
 namespace LMSCoreWebAPI.Service
 {
     public interface IUserService
@@ -16,8 +17,12 @@ namespace LMSCoreWebAPI.Service
         IEnumerable<User> GetAll();
         User GetById(int id);
         User Create(User user, string password, UserDto userDto);
-        void Update(User user, string password = null);
+        void Update(User user, string password = null, List<string> departments = null, List<string> roles = null);
         void Delete(int id);
+
+        User UpdateUserPassword(User user, string password);
+
+        IEnumerable<User> GetAllVerifiedUsers(int institutionId);
     }
 
     public class UserService : IUserService
@@ -34,13 +39,11 @@ namespace LMSCoreWebAPI.Service
             if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
                 return null;
 
-            var user = _context.User.Include(a => a.Userrole).Include(a=>a.Userinstitution).Include(a=>a.Userdepartment).SingleOrDefault(x => x.UserName == username);
+            var user = _context.User.Include(a => a.Userrole).Include(a => a.Userinstitution).Include(a => a.Userdepartment).SingleOrDefault(x => x.UserName == username && x.IsVerified == 1);
 
-            // check if username exists
             if (user == null)
                 return null;
 
-            // check if password is correct
             if (!VerifyPasswordHash(password, user.PasswordHash, user.PasswordSalt))
                 return null;
 
@@ -50,12 +53,44 @@ namespace LMSCoreWebAPI.Service
 
         public IEnumerable<User> GetAll()
         {
-            return _context.User;
+            return _context.User.Include(a => a.Userrole).Include(a => a.Userinstitution).Include(a => a.Userdepartment);
+        }
+
+        public IEnumerable<User> GetAllVerifiedUsers(int institutionId)
+        {
+            List<User> allUsers = _context.User.Include(a => a.Userrole).Include(a => a.Userinstitution).Include(a => a.Userdepartment).Where(u => u.IsVerified == 1).ToList();
+            List<User> verifiedUser = new List<User>();
+            if(allUsers != null && allUsers.Count > 0)
+            {
+                foreach(User user in allUsers)
+                {
+                    List<Userinstitution> userIns = user.Userinstitution.ToList();
+                    if(userIns.Any(u=>u.InstitutionId == institutionId))
+                    {
+                        verifiedUser.Add(user);
+                    }
+                }                
+            }
+            return verifiedUser;
         }
 
         public User GetById(int id)
         {
-            return _context.User.Find(id);
+            return _context.User.Include(a => a.Userrole).Include(a => a.Userinstitution).Include(a => a.Userdepartment).Where(u => u.UserId == id).SingleOrDefault();
+        }
+
+        public User UpdateUserPassword(User user, string password)
+        {
+            byte[] passwordHash, passwordSalt;
+            CreatePasswordHash(password, out passwordHash, out passwordSalt);
+
+            user.PasswordHash = passwordHash;
+            user.PasswordSalt = passwordSalt;
+
+            _context.Entry(user).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
+            _context.SaveChanges();
+
+            return user;
         }
 
         public User Create(User user, string password, UserDto userDto)
@@ -75,36 +110,61 @@ namespace LMSCoreWebAPI.Service
             user.PasswordHash = passwordHash;
             user.PasswordSalt = passwordSalt;
 
+            user.UserStatusId = (int)UserStatus.Deactived;
+            user.IsVerified = 0;
+            user.UniqueId = Guid.NewGuid().ToString();
+
             _context.User.Add(user);
             _context.SaveChanges();
 
-            if (!string.IsNullOrEmpty(userDto.Department))
+            if (userDto.Department != null && userDto.Department.Count > 0)
             {
-                var dept = _context.Department.Where(r => r.DepartmentName.Equals(userDto.Department, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-                if (dept != null)
+                foreach (string department in userDto.Department)
                 {
-                    Userdepartment userDept = new Userdepartment();
-                    userDept.UserId = user.UserId;
-                    userDept.DepartmentId = dept.DepartmentId;
+                    var dept = _context.Department.Where(r => r.DepartmentName.Equals(department, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                    if (dept != null)
+                    {
+                        Userdepartment userDept = new Userdepartment();
+                        userDept.UserId = user.UserId;
+                        userDept.DepartmentId = dept.DepartmentId;
 
-                    user.Userdepartment = new List<Userdepartment> { userDept };
+                        user.Userdepartment = new List<Userdepartment> { userDept };
+                    }
                 }
             }
 
-            if (!string.IsNullOrEmpty(userDto.Role))
-            {
-                var role = _context.Role.Where(r => r.RoleName.Equals(userDto.Role, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-                if (role != null)
-                {
-                    Userrole userRole = new Userrole();
-                    userRole.RoleId = role.RoleId;
-                    userRole.UserId = user.UserId;
 
-                    user.Userrole = new List<Userrole> { userRole };
+
+            if (userDto.Role != null && userDto.Role.Count > 0)
+            {
+                foreach (string roleName in userDto.Role)
+                {
+                    var role = _context.Role.Where(r => r.RoleName.Equals(roleName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                    if (role != null)
+                    {
+                        Userrole userRole = new Userrole();
+                        userRole.RoleId = role.RoleId;
+                        userRole.UserId = user.UserId;
+
+                        user.Userrole = new List<Userrole> { userRole };
+                    }
                 }
+
             }
 
-            var institution = _context.Institution.Where(i => i.InstitutionId == userDto.InstitutionId).FirstOrDefault();
+            Institution institution = null;
+            if (userDto.InstitutionId > 0)
+            {
+                institution = _context.Institution.Where(i => i.InstitutionId == userDto.InstitutionId).FirstOrDefault();
+            }
+            else if (!string.IsNullOrEmpty(userDto.InstitutionName))
+            {
+                institution = _context.Institution.Where(i => i.InstitutionName.Contains(userDto.InstitutionName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+            }
+            else if (!string.IsNullOrEmpty(userDto.InstitutionUrl))
+            {
+                institution = _context.Institution.Where(i => i.InstitutionUrl.Contains(userDto.InstitutionUrl, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+            }
 
             Userinstitution userIns = new Userinstitution();
             userIns.UserId = user.UserId;
@@ -112,14 +172,14 @@ namespace LMSCoreWebAPI.Service
             user.Userinstitution = new List<Userinstitution> { userIns };
 
             _context.User.Update(user);
-             _context.SaveChanges();
+            _context.SaveChanges();
 
             return user;
         }
 
-        public void Update(User userParam, string password = null)
+        public void Update(User userParam, string password = null, List<string> departments = null, List<string> roles = null)
         {
-            var user = _context.User.Find(userParam.UserId);
+            var user = GetById(userParam.UserId);
 
             if (user == null)
                 throw new AppException("User not found");
@@ -132,9 +192,12 @@ namespace LMSCoreWebAPI.Service
             }
 
             // update user properties
-            user.FirstName = userParam.FirstName;
-            user.LastName = userParam.LastName;
-            user.UserName = userParam.UserName;
+            user.FirstName = !string.IsNullOrEmpty(userParam.FirstName) ? userParam.FirstName : user.FirstName;
+            user.LastName = !string.IsNullOrEmpty(userParam.LastName) ? userParam.LastName : user.LastName;
+            user.UserName = !string.IsNullOrEmpty(userParam.UserName) ? userParam.UserName : user.UserName;
+            user.MobileNumber = userParam.MobileNumber.HasValue ? userParam.MobileNumber.Value : user.MobileNumber;
+            user.UserStatusId = userParam.UserStatusId.HasValue ? userParam.UserStatusId.Value : user.UserStatusId;
+            user.ModfiedDate = System.DateTime.Now;
 
             // update password if it was entered
             if (!string.IsNullOrWhiteSpace(password))
@@ -144,6 +207,54 @@ namespace LMSCoreWebAPI.Service
 
                 user.PasswordHash = passwordHash;
                 user.PasswordSalt = passwordSalt;
+            }
+
+            if (departments != null && departments.Count > 0)
+            {
+                foreach (string department in departments)
+                {
+                    var dept = _context.Department.Where(r => r.DepartmentName.Equals(department, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                    if (dept != null)
+                    {
+                        Userdepartment userDept = new Userdepartment();
+                        userDept.UserId = user.UserId;
+                        userDept.DepartmentId = dept.DepartmentId;
+
+                        if (user.Userdepartment == null)
+                        {
+                            user.Userdepartment = new List<Userdepartment> { userDept };
+                        }
+                        else if (!user.Userdepartment.Any(d => d.DepartmentId == dept.DepartmentId))
+                        {
+                            user.Userdepartment.Add(userDept);
+                        }
+                    }
+                }
+
+            }
+
+            if (roles != null && roles.Count > 0)
+            {
+                foreach (string roleName in roles)
+                {
+                    var role = _context.Role.Where(r => r.RoleName.Equals(roleName, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
+                    if (role != null)
+                    {
+                        Userrole userRole = new Userrole();
+                        userRole.RoleId = role.RoleId;
+                        userRole.UserId = user.UserId;
+
+                        if (user.Userrole == null)
+                        {
+                            user.Userrole = new List<Userrole> { userRole };
+                        }
+                        else if (!user.Userrole.Any(r => r.RoleId == role.RoleId))
+                        {
+                            user.Userrole.Add(userRole);
+                        }
+                    }
+                }
+
             }
 
             _context.User.Update(user);

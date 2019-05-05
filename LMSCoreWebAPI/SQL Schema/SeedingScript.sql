@@ -1,6 +1,7 @@
 INSERT INTO   `Institution`(`InstitutionName`) VALUES ('Anna University')
 
 
+INSERT INTO   `Role`(`RoleName`, `RoleDescription`) VALUES ('SuperAdmin','Admin' )
 INSERT INTO   `Role`(`RoleName`, `RoleDescription`) VALUES ('Admin','Admin' )
 INSERT INTO   `Role`(`RoleName`, `RoleDescription`) VALUES ('Professor','Professor' )
 
