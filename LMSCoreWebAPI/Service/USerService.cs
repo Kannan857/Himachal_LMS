@@ -18,7 +18,7 @@ namespace LMSCoreWebAPI.Service
         User GetById(int id);
         User Create(User user, string password, UserDto userDto);
         void Update(User user, string password = null, List<string> departments = null, List<string> roles = null);
-        void Delete(int id);
+        void Delete(int id); 
 
         User UpdateUserPassword(User user, string password);
 
